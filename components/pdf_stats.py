@@ -4,61 +4,65 @@ import io
 from typing import Dict, Any
 import pandas as pd
 
-def get_pdf_statistics(pdf_file: io.BytesIO) -> Dict[str, Any]:
+def get_pdf_statistics(pdf_content: bytes) -> Dict[str, Any]:
     """
-    Analyze a PDF file and return various statistics.
+    Analyze a PDF file and return statistics about its content.
     
     Args:
-        pdf_file: A BytesIO object containing the PDF file
+        pdf_content: The PDF file content as bytes
         
     Returns:
         Dictionary containing PDF statistics
     """
-    # Open the PDF document
-    doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
-    
-    # Initialize statistics
-    stats = {
-        "total_pages": len(doc),
-        "page_dimensions": [],
-        "total_images": 0,
-        "total_text_blocks": 0,
-        "total_lines": 0,
-        "total_words": 0,
-        "total_characters": 0,
-        "metadata": doc.metadata
-    }
-    
-    # Analyze each page
-    for page_num in range(len(doc)):
-        page = doc[page_num]
+    try:
+        # Open the PDF from bytes
+        doc = fitz.open(stream=pdf_content, filetype="pdf")
         
-        # Get page dimensions
-        stats["page_dimensions"].append({
-            "page": page_num + 1,
-            "width": page.rect.width,
-            "height": page.rect.height
-        })
+        # Initialize counters
+        total_images = 0
+        total_text_blocks = 0
+        total_lines = 0
+        total_words = 0
+        total_characters = 0
         
-        # Get images
-        images = page.get_images()
-        stats["total_images"] += len(images)
+        # Process each page
+        for page in doc:
+            # Count images
+            total_images += len(page.get_images())
+            
+            # Get text blocks
+            blocks = page.get_text("dict")["blocks"]
+            total_text_blocks += len(blocks)
+            
+            # Process each block
+            for block in blocks:
+                if "lines" in block:
+                    total_lines += len(block["lines"])
+                    for line in block["lines"]:
+                        if "spans" in line:
+                            for span in line["spans"]:
+                                text = span["text"]
+                                total_words += len(text.split())
+                                total_characters += len(text)
         
-        # Get text blocks and analyze text
-        blocks = page.get_text("dict")["blocks"]
-        stats["total_text_blocks"] += len(blocks)
+        # Get metadata
+        metadata = doc.metadata
         
-        for block in blocks:
-            if "lines" in block:
-                stats["total_lines"] += len(block["lines"])
-                for line in block["lines"]:
-                    if "spans" in line:
-                        for span in line["spans"]:
-                            stats["total_words"] += len(span["text"].split())
-                            stats["total_characters"] += len(span["text"])
-    
-    doc.close()
-    return stats
+        # Close the document
+        doc.close()
+        
+        return {
+            "total_pages": len(doc),
+            "total_images": total_images,
+            "total_text_blocks": total_text_blocks,
+            "total_lines": total_lines,
+            "total_words": total_words,
+            "total_characters": total_characters,
+            "metadata": metadata
+        }
+        
+    except Exception as e:
+        raise Exception(f"Error analyzing PDF: {str(e)}")
 
 def display_pdf_statistics(pdf_file: io.BytesIO):
     """
@@ -68,7 +72,7 @@ def display_pdf_statistics(pdf_file: io.BytesIO):
         pdf_file: A BytesIO object containing the PDF file
     """
     try:
-        stats = get_pdf_statistics(pdf_file)
+        stats = get_pdf_statistics(pdf_file.read())
         
         # Display basic statistics
         col1, col2, col3 = st.columns(3)

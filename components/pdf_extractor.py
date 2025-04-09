@@ -2,64 +2,71 @@ import fitz  # PyMuPDF
 import io
 from typing import List, Union
 
-def parse_page_numbers(page_input: str) -> List[int]:
+def parse_page_numbers(page_numbers: str) -> List[int]:
     """
-    Parse page number input string into a list of page numbers.
+    Parse a string of page numbers into a list of integers.
     Supports ranges (e.g., '1-5') and individual numbers (e.g., '1,3,5').
     
     Args:
-        page_input: String containing page numbers (e.g., '1-5' or '1,3,5' or '1-3,5-7')
+        page_numbers: String containing page numbers (e.g., '1-5' or '1,3,5')
         
     Returns:
-        List of page numbers (0-indexed)
+        List of page numbers
     """
     pages = []
-    # Split by comma to handle multiple ranges/numbers
-    parts = page_input.split(',')
-    
-    for part in parts:
+    for part in page_numbers.split(','):
         if '-' in part:
-            # Handle range
             start, end = map(int, part.split('-'))
-            pages.extend(range(start - 1, end))  # Convert to 0-indexed
+            pages.extend(range(start, end + 1))
         else:
-            # Handle single number
-            pages.append(int(part) - 1)  # Convert to 0-indexed
-    
-    return sorted(list(set(pages)))  # Remove duplicates and sort
+            pages.append(int(part))
+    return sorted(set(pages))  # Remove duplicates and sort
 
-def extract_text_from_pages(pdf_file: io.BytesIO, page_numbers: str) -> str:
+def extract_text_from_pages(pdf_content: bytes, page_numbers: str) -> str:
     """
     Extract text from specified pages of a PDF file.
     
     Args:
-        pdf_file: BytesIO object containing the PDF
-        page_numbers: String specifying pages to extract (e.g., '1-5' or '1,3,5')
+        pdf_content: The PDF file content as bytes
+        page_numbers: String containing page numbers (e.g., '1-5' or '1,3,5')
         
     Returns:
-        Extracted text from specified pages
+        Extracted text from the specified pages
     """
     try:
-        # Open the PDF document
-        doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
+        # Validate input
+        if not pdf_content:
+            raise ValueError("PDF content is empty")
+        
+        if not page_numbers:
+            raise ValueError("No page numbers specified")
         
         # Parse page numbers
         pages_to_extract = parse_page_numbers(page_numbers)
         
+        # Create a BytesIO object from the PDF content
+        pdf_stream = io.BytesIO(pdf_content)
+        
+        # Open the PDF
+        doc = fitz.open(stream=pdf_stream, filetype="pdf")
+        
         # Validate page numbers
         if not pages_to_extract:
-            raise ValueError("No valid page numbers provided")
-        if max(pages_to_extract) >= len(doc):
-            raise ValueError(f"Page number {max(pages_to_extract) + 1} exceeds PDF length ({len(doc)})")
+            raise ValueError("No valid page numbers found")
+        
+        if max(pages_to_extract) > len(doc):
+            raise ValueError(f"Page number {max(pages_to_extract)} exceeds total pages ({len(doc)})")
         
         # Extract text from specified pages
         extracted_text = ""
         for page_num in pages_to_extract:
-            page = doc[page_num]
+            page = doc[page_num - 1]  # Convert to 0-based index
             text = page.get_text()
-            extracted_text += f"\n\n--- Page {page_num + 1} ---\n\n{text}"
+            extracted_text += f"\n\n--- Page {page_num} ---\n{text}\n"
         
+        # Close the document
         doc.close()
+        
         return extracted_text.strip()
         
     except Exception as e:

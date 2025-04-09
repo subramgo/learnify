@@ -30,75 +30,69 @@ st.title("Learnify Your Personal Tutor")
 tab1, tab2, tab3 = st.tabs(["📄 Document Uploader", "⚙️ Settings", "📚 Learn"])
 
 with tab1:
-    st.header("PDF Document Uploader")
-    st.write("Upload and analyze your pdf document here.")
-
-    # --- PDF Upload and Analysis ---
-    st.subheader("PDF Analysis")
+    st.header("Document Uploader")
+    st.write("Upload your PDF documents here for analysis.")
+    
+    # File uploader
     uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
+    
+    # Store uploaded file in session state
     if uploaded_file is not None:
-        # Create tabs for different PDF analysis views
-        analysis_tab1, analysis_tab2 = st.tabs(["📊 Statistics", "📄 Preview"])
+        # Read the file content
+        file_content = uploaded_file.read()
         
-        with analysis_tab1:
-            from components.pdf_stats import display_pdf_statistics
-            display_pdf_statistics(uploaded_file)
+        # Store both the file content and name in session state
+        st.session_state.uploaded_file = {
+            "content": file_content,
+            "name": uploaded_file.name
+        }
         
-        with analysis_tab2:
-            st.write("PDF uploaded successfully!")
-            # Display the PDF content using pdfplumber
-            import pdfplumber
-            import random
+        # Display file info
+        st.success(f"File '{uploaded_file.name}' uploaded successfully!")
+        
+        # Display PDF statistics
+        from components.pdf_stats import get_pdf_statistics
+        try:
+            stats = get_pdf_statistics(file_content)
+            st.subheader("Document Statistics")
+            st.write(f"Total Pages: {stats['total_pages']}")
+            st.write(f"Total Images: {stats['total_images']}")
+            st.write(f"Total Text Blocks: {stats['total_text_blocks']}")
+            st.write(f"Total Lines: {stats['total_lines']}")
+            st.write(f"Total Words: {stats['total_words']}")
+            st.write(f"Total Characters: {stats['total_characters']}")
             
-            with pdfplumber.open(uploaded_file) as pdf:
-                total_pages = len(pdf.pages)
-                
-                # Add a button to sample random pages
-                if st.button("Sample Random Pages"):
-                    # Sample 3 random pages (or fewer if PDF has less than 3 pages)
-                    num_pages_to_sample = min(3, total_pages)
-                    sampled_pages = random.sample(range(total_pages), num_pages_to_sample)
-                    
-                    for page_num in sampled_pages:
-                        page = pdf.pages[page_num]
-                        st.subheader(f"Page {page_num + 1}")
-                        st.text(page.extract_text())
-                        st.markdown("---")
-                
-                # Always show the first page
-                st.subheader("First Page Preview")
-                first_page = pdf.pages[0]
-                st.text(first_page.extract_text())
-            
-            # Add download button
-            st.download_button(
-                label="Download PDF",
-                data=uploaded_file,
-                file_name=uploaded_file.name,
-                mime="application/pdf"
-            )
-    else:
-        st.write("Please upload a PDF file to analyze.")
+            # Display metadata if available
+            if stats['metadata']:
+                st.subheader("Document Metadata")
+                for key, value in stats['metadata'].items():
+                    if value:  # Only display non-empty metadata
+                        st.write(f"{key}: {value}")
+        except Exception as e:
+            st.error(f"Error analyzing PDF: {str(e)}")
+        
+        # Reset the file uploader
+        uploaded_file = None
+    
+    # Display current file info if exists
+    if 'uploaded_file' in st.session_state:
+        st.info(f"Current file: {st.session_state.uploaded_file['name']}")
+    
+    # Add a clear button
+    if st.button("Clear Uploaded File"):
+        if 'uploaded_file' in st.session_state:
+            del st.session_state.uploaded_file
+            st.success("File cleared successfully!")
 
 with tab2:
     st.header("Settings")
-    st.write("Configure your application settings here.")
-    
-    # Store uploaded file in session state
-    if 'uploaded_file' not in st.session_state and uploaded_file is not None:
-        st.session_state.uploaded_file = uploaded_file
-    
-    # LLM Provider Selection
     st.subheader("LLM Provider")
-    provider = st.radio(
-        "Select the LLM provider for content generation:",
-        options=["openai", "groq"],
-        format_func=lambda x: "OpenAI" if x == "openai" else "Groq",
-        help="Choose between OpenAI's GPT-4 or Groq's Mixtral model"
-    )
+    st.info("Currently using OpenAI GPT-4 Turbo for content generation.")
     
-    # Store provider in session state
-    st.session_state.llm_provider = provider
+    # Check if a file is uploaded
+    if 'uploaded_file' not in st.session_state:
+        st.warning("Please upload a PDF file in the Document Uploader tab first.")
+        st.stop()
     
     # Page numbers of interest
     st.subheader("Pages of Interest")
@@ -111,35 +105,28 @@ with tab2:
     if page_numbers:
         st.session_state.page_numbers = page_numbers
     
-    # Content generation options
-    st.subheader("Content Generation Options")
+    # Content Generation Options
+    st.subheader("Content Generation")
     options = st.multiselect(
-        "Select the type of content you want to generate:",
-        options=[
-            "Generate a quick summary",
-            "Create a quick Quiz",
-            "Create a set of analytics questions"
-        ],
+        "Select content types to generate",
+        ["Generate a quick summary", "Create a quick Quiz", "Create a set of analytics questions"],
         default=["Generate a quick summary"]
     )
     
-    # Process button
+    # Generate Content Button
     if st.button("Generate Content"):
         if not page_numbers:
             st.warning("Please enter page numbers first.")
         elif not options:
-            st.warning("Please select at least one content generation option.")
+            st.warning("Please select at least one content type to generate.")
         else:
             try:
                 # Extract text from PDF
                 from components.pdf_extractor import extract_text_from_pages
                 extracted_text = extract_text_from_pages(
-                    st.session_state.uploaded_file,
+                    st.session_state.uploaded_file["content"],
                     st.session_state.page_numbers
                 )
-                
-                # Get the selected provider
-                provider = st.session_state.get('llm_provider', 'openai')
                 
                 # Initialize content dictionary
                 generated_content = {}
@@ -147,22 +134,22 @@ with tab2:
                 # Generate content based on selected options
                 if "Generate a quick summary" in options:
                     from components.summarizer import generate_summary
-                    summary = generate_summary(extracted_text, provider=provider)
+                    summary = generate_summary(extracted_text)
                     generated_content["summary"] = summary
                 
                 if "Create a quick Quiz" in options:
                     from components.quiz_generator import generate_quiz
-                    quiz = generate_quiz(extracted_text, provider=provider)
+                    quiz = generate_quiz(extracted_text)
                     generated_content["quiz"] = quiz
                 
                 if "Create a set of analytics questions" in options:
                     from components.analytics_questions import generate_analytics_questions
-                    analytics = generate_analytics_questions(extracted_text, provider=provider)
+                    analytics = generate_analytics_questions(extracted_text)
                     generated_content["analytics"] = analytics
                 
                 # Store in session state
                 st.session_state.generated_content = generated_content
-                st.success(f"Content generated successfully using {provider.capitalize()}! Check the Learn tab to view the results.")
+                st.success("Content generated successfully! Check the Learn tab to view the results.")
                 
             except Exception as e:
                 st.error(f"Error generating content: {str(e)}")
