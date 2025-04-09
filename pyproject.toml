@@ -1,0 +1,15 @@
+[project]
+name = "learnify"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "langchain-groq>=0.3.2",
+    "langchain-openai>=0.3.12",
+    "langgraph>=0.3.27",
+    "pdfplumber>=0.11.6",
+    "pymupdf>=1.25.5",
+    "streamlit>=1.44.1",
+    "streamlit-oauth>=0.1.14",
+]
