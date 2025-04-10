@@ -51,23 +51,9 @@ with tab1:
         st.success(f"File '{uploaded_file.name}' uploaded successfully!")
         
         # Display PDF statistics
-        from components.pdf_stats import get_pdf_statistics
+        from components.pdf_stats import display_pdf_statistics
         try:
-            stats = get_pdf_statistics(file_content)
-            st.subheader("Document Statistics")
-            st.write(f"Total Pages: {stats['total_pages']}")
-            st.write(f"Total Images: {stats['total_images']}")
-            st.write(f"Total Text Blocks: {stats['total_text_blocks']}")
-            st.write(f"Total Lines: {stats['total_lines']}")
-            st.write(f"Total Words: {stats['total_words']}")
-            st.write(f"Total Characters: {stats['total_characters']}")
-            
-            # Display metadata if available
-            if stats['metadata']:
-                st.subheader("Document Metadata")
-                for key, value in stats['metadata'].items():
-                    if value:  # Only display non-empty metadata
-                        st.write(f"{key}: {value}")
+            display_pdf_statistics(file_content)
         except Exception as e:
             st.error(f"Error analyzing PDF: {str(e)}")
         
